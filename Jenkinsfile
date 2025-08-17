@@ -30,29 +30,30 @@ spec:
 """
     }
   }
+
   environment {
     IMAGE_BLUE = "myapp:blue"
     IMAGE_GREEN = "myapp:green"
   }
+
   parameters {
     choice(name: 'COLOR', choices: ['blue','green'], description: 'Which deployment to create/update')
     booleanParam(name: 'SWITCH', defaultValue: false, description: 'Switch traffic to this version?')
   }
-  stage('Build Images') {
-  steps {
-    container('docker') {
-      script {
-        def imageName = "${params.COLOR == 'blue' ? IMAGE_BLUE : IMAGE_GREEN}"
-        sh """
-          docker build -t ${imageName} ./${params.COLOR}
-          # For local registry (optional):
-          # docker tag ${imageName} localhost:5000/${imageName}
-          # docker push localhost:5000/${imageName}
-        """
+
+  stages {
+    stage('Build Images') {
+      steps {
+        container('docker') {
+          script {
+            def dir = params.COLOR
+            sh """
+              docker build -t ${params.COLOR == 'blue' ? IMAGE_BLUE : IMAGE_GREEN} ./${dir}
+            """
+          }
+        }
       }
     }
-  }
-}
 
     stage('Deploy to Kubernetes') {
       steps {
@@ -64,6 +65,7 @@ spec:
         }
       }
     }
+
     stage('Traffic Switch') {
       when { expression { params.SWITCH } }
       steps {
@@ -76,6 +78,7 @@ spec:
       }
     }
   }
+
   post {
     always {
       container('kubectl') {
@@ -96,4 +99,3 @@ spec:
     }
   }
 }
-
