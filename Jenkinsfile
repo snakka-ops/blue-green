@@ -19,7 +19,7 @@ spec:
       - name: docker-sock
         mountPath: /var/run/docker.sock
   - name: kubectl
-    image: bitnami/kubectl:1.29
+    image: lachlanevenson/k8s-kubectl:latest
     command:
       - cat
     tty: true
@@ -45,8 +45,8 @@ spec:
   }
 
   parameters {
-    choice(name: 'COLOR', choices: ['blue','green'], description: 'Which color to deploy')
-    booleanParam(name: 'SWITCH', defaultValue: false, description: 'Switch service to this color?')
+    choice(name: 'COLOR', choices: ['blue','green'], description: 'Color to deploy')
+    booleanParam(name: 'SWITCH', defaultValue: false, description: 'Switch service to this version?')
   }
 
   stages {
@@ -65,9 +65,7 @@ spec:
       steps {
         container('kubectl') {
           sh """
-            # apply manifest
             kubectl apply -n ${NAMESPACE} -f k8s/${params.COLOR}-deployment.yaml
-            # wait for rollout
             kubectl rollout status deployment/myapp-${params.COLOR} -n ${NAMESPACE} --timeout=300s
           """
         }
@@ -91,19 +89,19 @@ spec:
     always {
       container('kubectl') {
         sh """
-          echo === Service Selector ===
+          echo '=== Service Selector ==='
           kubectl get svc myapp-svc -n ${NAMESPACE} -o jsonpath='{.spec.selector}'
           echo
-          echo === Deployments ===
+          echo '=== Current Deployments ==='
           kubectl get deployments -n ${NAMESPACE} -l app=myapp
         """
       }
     }
     success {
-      echo "✅ Blue-Green pipeline succeeded."
+      echo "✅ Pipeline completed successfully."
     }
     failure {
-      echo "❌ Pipeline failed; check the logs above."
+      echo "❌ Pipeline failed; please review the logs above."
     }
   }
 }
