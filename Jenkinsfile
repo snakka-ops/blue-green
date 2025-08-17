@@ -18,7 +18,7 @@ spec:
     - name: var-run-docker
       mountPath: /var/run/docker.sock
   - name: kubectl
-    image: bitnami/kubectl:1.29
+    image: alpine/k8s:1.28.0
     command:
     - cat
     tty: true
@@ -60,7 +60,7 @@ spec:
         container('kubectl') {
           sh """
             kubectl apply -n jenkins -f k8s/${params.COLOR}-deployment.yaml
-            kubectl rollout status deployment/myapp-${params.COLOR} -n jenkins
+            kubectl rollout status deployment/myapp-${params.COLOR} -n jenkins --timeout=300s
           """
         }
       }
@@ -84,10 +84,10 @@ spec:
       container('kubectl') {
         sh """
           echo "=== Service Selector ==="
-          kubectl get svc myapp-svc -n jenkins -o jsonpath='{.spec.selector}'
+          kubectl get svc myapp-svc -n jenkins -o jsonpath='{.spec.selector}' || echo "Service not found"
           echo
           echo "=== Deployments ==="
-          kubectl get deployments -n jenkins -l app=myapp
+          kubectl get deployments -n jenkins -l app=myapp || echo "No deployments found"
         """
       }
     }
