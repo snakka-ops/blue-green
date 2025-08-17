@@ -13,67 +13,61 @@ spec:
   - name: docker
     image: docker:24.0.7-cli
     command:
-    - cat
+      - cat
     tty: true
     volumeMounts:
-    - name: dockersock
-      mountPath: /var/run/docker.sock
-    - name: workspace
-      mountPath: /home/jenkins/agent
+      - name: docker-sock
+        mountPath: /var/run/docker.sock
   - name: kubectl
     image: bitnami/kubectl:1.29
     command:
-    - cat
+      - cat
     tty: true
-    volumeMounts:
-    - name: workspace
-      mountPath: /home/jenkins/agent
   - name: jnlp
     image: jenkins/inbound-agent:latest
-    args: ['\$(JENKINS_SECRET)', '\$(JENKINS_NAME)']
-    volumeMounts:
-    - name: workspace
-      mountPath: /home/jenkins/agent
+    args:
+      - "\$(JENKINS_SECRET)"
+      - "\$(JENKINS_NAME)"
+    tty: true
   volumes:
-  - name: dockersock
-    hostPath:
-      path: /var/run/docker.sock
-      type: Socket
-  - name: workspace
-    emptyDir: {}
+    - name: docker-sock
+      hostPath:
+        path: /var/run/docker.sock
+        type: Socket
 """
     }
   }
 
   environment {
-    IMAGE_BLUE  = "myapp:blue"
-    IMAGE_GREEN = "myapp:green"
-    NAMESPACE   = "jenkins"
+    NAMESPACE    = "jenkins"
+    IMAGE_BLUE   = "myapp:blue"
+    IMAGE_GREEN  = "myapp:green"
   }
 
   parameters {
     choice(name: 'COLOR', choices: ['blue','green'], description: 'Which color to deploy')
-    booleanParam(name: 'SWITCH', defaultValue: false, description: 'Switch service traffic to this color?')
+    booleanParam(name: 'SWITCH', defaultValue: false, description: 'Switch service to this color?')
   }
 
   stages {
     stage('Build Image') {
       steps {
         container('docker') {
-          script {
-            sh """
-              docker build -t ${params.COLOR == 'blue' ? IMAGE_BLUE : IMAGE_GREEN} ./${params.COLOR}
-            """
-          }
+          sh """
+            cd ${params.COLOR}
+            docker build -t ${params.COLOR == 'blue' ? IMAGE_BLUE : IMAGE_GREEN} .
+          """
         }
       }
     }
 
-    stage('Deploy') {
+    stage('Deploy to Kubernetes') {
       steps {
         container('kubectl') {
           sh """
+            # apply manifest
             kubectl apply -n ${NAMESPACE} -f k8s/${params.COLOR}-deployment.yaml
+            # wait for rollout
             kubectl rollout status deployment/myapp-${params.COLOR} -n ${NAMESPACE} --timeout=300s
           """
         }
@@ -85,8 +79,8 @@ spec:
       steps {
         container('kubectl') {
           sh """
-            kubectl patch svc myapp-svc -n ${NAMESPACE} \
-              -p '{"spec":{"selector":{"version":"${params.COLOR}"}}}'
+            kubectl patch svc myapp-svc -n ${NAMESPACE} \\
+              -p '{\"spec\":{\"selector\":{\"version\":\"${params.COLOR}\"}}}'
           """
         }
       }
@@ -97,19 +91,19 @@ spec:
     always {
       container('kubectl') {
         sh """
-          echo "Service selector now:" 
+          echo === Service Selector ===
           kubectl get svc myapp-svc -n ${NAMESPACE} -o jsonpath='{.spec.selector}'
           echo
-          echo "Current deployments:"
+          echo === Deployments ===
           kubectl get deployments -n ${NAMESPACE} -l app=myapp
         """
       }
     }
     success {
-      echo "✅ Pipeline completed successfully."
+      echo "✅ Blue-Green pipeline succeeded."
     }
     failure {
-      echo "❌ Pipeline failed; check logs for details."
+      echo "❌ Pipeline failed; check the logs above."
     }
   }
 }
