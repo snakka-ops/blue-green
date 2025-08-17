@@ -38,20 +38,22 @@ spec:
     choice(name: 'COLOR', choices: ['blue','green'], description: 'Which deployment to create/update')
     booleanParam(name: 'SWITCH', defaultValue: false, description: 'Switch traffic to this version?')
   }
-  stages {
-    stage('Build Images') {
-      steps {
-        container('docker') {
-          script {
-            def dir = params.COLOR
-            sh """
-              docker build -t ${params.COLOR == 'blue' ? IMAGE_BLUE : IMAGE_GREEN} ./${dir}
-              minikube image load ${params.COLOR == 'blue' ? IMAGE_BLUE : IMAGE_GREEN}
-            """
-          }
-        }
+  stage('Build Images') {
+  steps {
+    container('docker') {
+      script {
+        def imageName = "${params.COLOR == 'blue' ? IMAGE_BLUE : IMAGE_GREEN}"
+        sh """
+          docker build -t ${imageName} ./${params.COLOR}
+          # For local registry (optional):
+          # docker tag ${imageName} localhost:5000/${imageName}
+          # docker push localhost:5000/${imageName}
+        """
       }
     }
+  }
+}
+
     stage('Deploy to Kubernetes') {
       steps {
         container('kubectl') {
@@ -94,3 +96,4 @@ spec:
     }
   }
 }
+
